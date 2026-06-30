@@ -5,31 +5,6 @@
 ! Red base usada por matrícula: 10.7.25.0
 ! ============================================================
 
-
-! ============================================================
-! LIMPIEZA OPCIONAL EN R1 Y R2
-! Usar solo si duplicaste un laboratorio anterior.
-! ============================================================
-
-enable
-configure terminal
-
-interface Ethernet0/0
- no crypto map VPN-MAP
-exit
-
-no interface Tunnel0
-no crypto map VPN-MAP
-no crypto ipsec profile PROFILE-IKEV1
-no crypto ipsec transform-set TS-IKEV1
-no crypto isakmp policy 10
-no ip access-list extended VPN-TRAFFIC
-no access-list 110
-
-end
-write memory
-
-
 ! ============================================================
 ! CONFIGURACIÓN DEL ROUTER ISP
 ! ============================================================
