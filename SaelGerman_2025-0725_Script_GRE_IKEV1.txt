@@ -1,0 +1,253 @@
+! ============================================================
+! Sael German 2025-0725
+! VPN Cisco IPSec IKEv1 Site-to-Site con túnel GRE
+! Topología: VPC1 --- R1 --- ISP --- R2 --- VPC2
+! Red base usada por matrícula: 10.7.25.0
+! ============================================================
+
+
+! ============================================================
+! LIMPIEZA OPCIONAL EN R1 Y R2
+! Usar solo si duplicaste un laboratorio anterior.
+! ============================================================
+
+enable
+configure terminal
+
+interface Ethernet0/0
+ no crypto map VPN-MAP
+exit
+
+no interface Tunnel0
+no crypto map VPN-MAP
+no crypto ipsec profile PROFILE-IKEV1
+no crypto ipsec transform-set TS-IKEV1
+no crypto isakmp policy 10
+no ip access-list extended VPN-TRAFFIC
+no access-list 110
+
+end
+write memory
+
+
+! ============================================================
+! CONFIGURACIÓN DEL ROUTER ISP
+! ============================================================
+
+enable
+configure terminal
+
+hostname ISP
+
+interface Ethernet0/0
+ description ENLACE_A_R1
+ ip address 10.7.25.2 255.255.255.252
+ no shutdown
+
+interface Ethernet0/1
+ description ENLACE_A_R2
+ ip address 10.7.25.6 255.255.255.252
+ no shutdown
+
+end
+write memory
+
+
+! ============================================================
+! CONFIGURACIÓN DEL ROUTER R1
+! ============================================================
+
+enable
+configure terminal
+
+hostname R1
+
+interface Ethernet0/0
+ description WAN_HACIA_ISP
+ ip address 10.7.25.1 255.255.255.252
+ no shutdown
+
+interface Ethernet0/1
+ description LAN_A
+ ip address 10.7.25.65 255.255.255.224
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 10.7.25.2
+
+crypto isakmp policy 10
+ encr aes 256
+ hash sha
+ authentication pre-share
+ group 5
+ lifetime 86400
+
+crypto isakmp key VPN12345 address 10.7.25.5
+
+crypto ipsec transform-set TS-IKEV1 esp-aes 256 esp-sha-hmac
+ mode tunnel
+
+ip access-list extended VPN-TRAFFIC
+ permit gre host 10.7.25.1 host 10.7.25.5
+
+crypto map VPN-MAP 10 ipsec-isakmp
+ description PROTEGER_TRAFICO_GRE_HACIA_R2
+ set peer 10.7.25.5
+ set transform-set TS-IKEV1
+ set pfs group5
+ match address VPN-TRAFFIC
+
+interface Ethernet0/0
+ crypto map VPN-MAP
+
+interface Tunnel0
+ description TUNEL_GRE_HACIA_R2
+ ip address 10.7.25.133 255.255.255.252
+ tunnel source Ethernet0/0
+ tunnel destination 10.7.25.5
+ tunnel mode gre ip
+ no shutdown
+
+ip route 10.7.25.96 255.255.255.224 Tunnel0
+
+end
+write memory
+
+
+! ============================================================
+! CONFIGURACIÓN DEL ROUTER R2
+! ============================================================
+
+enable
+configure terminal
+
+hostname R2
+
+interface Ethernet0/0
+ description WAN_HACIA_ISP
+ ip address 10.7.25.5 255.255.255.252
+ no shutdown
+
+interface Ethernet0/1
+ description LAN_B
+ ip address 10.7.25.97 255.255.255.224
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 10.7.25.6
+
+crypto isakmp policy 10
+ encr aes 256
+ hash sha
+ authentication pre-share
+ group 5
+ lifetime 86400
+
+crypto isakmp key VPN12345 address 10.7.25.1
+
+crypto ipsec transform-set TS-IKEV1 esp-aes 256 esp-sha-hmac
+ mode tunnel
+
+ip access-list extended VPN-TRAFFIC
+ permit gre host 10.7.25.5 host 10.7.25.1
+
+crypto map VPN-MAP 10 ipsec-isakmp
+ description PROTEGER_TRAFICO_GRE_HACIA_R1
+ set peer 10.7.25.1
+ set transform-set TS-IKEV1
+ set pfs group5
+ match address VPN-TRAFFIC
+
+interface Ethernet0/0
+ crypto map VPN-MAP
+
+interface Tunnel0
+ description TUNEL_GRE_HACIA_R1
+ ip address 10.7.25.134 255.255.255.252
+ tunnel source Ethernet0/0
+ tunnel destination 10.7.25.1
+ tunnel mode gre ip
+ no shutdown
+
+ip route 10.7.25.64 255.255.255.224 Tunnel0
+
+end
+write memory
+
+
+! ============================================================
+! CONFIGURACIÓN DE VPC1
+! Ejecutar en la consola de VPC1
+! ============================================================
+
+ip 10.7.25.66 255.255.255.224 10.7.25.65
+save
+
+
+! ============================================================
+! CONFIGURACIÓN DE VPC2
+! Ejecutar en la consola de VPC2
+! ============================================================
+
+ip 10.7.25.98 255.255.255.224 10.7.25.97
+save
+
+
+! ============================================================
+! COMANDOS DE VERIFICACIÓN EN R1
+! ============================================================
+
+show clock
+show ip interface brief
+show running-config interface tunnel0
+show running-config | section crypto
+show access-lists
+show ip route 10.7.25.96
+show interface tunnel0
+show crypto isakmp sa
+show crypto ipsec sa
+show crypto session
+
+
+! ============================================================
+! COMANDOS DE VERIFICACIÓN EN R2
+! ============================================================
+
+show clock
+show ip interface brief
+show running-config interface tunnel0
+show running-config | section crypto
+show access-lists
+show ip route 10.7.25.64
+show interface tunnel0
+show crypto isakmp sa
+show crypto ipsec sa
+show crypto session
+
+
+! ============================================================
+! COMANDOS DE PRUEBA EN VPC1
+! ============================================================
+
+show ip
+ping 10.7.25.98
+trace 10.7.25.98
+
+
+! ============================================================
+! COMANDOS DE PRUEBA EN VPC2
+! ============================================================
+
+show ip
+ping 10.7.25.66
+trace 10.7.25.66
+
+
+! ============================================================
+! RESULTADOS ESPERADOS
+! ============================================================
+! Tunnel0 debe aparecer up/up en R1 y R2.
+! show crypto isakmp sa debe mostrar QM_IDLE.
+! show crypto session debe mostrar UP-ACTIVE.
+! show crypto ipsec sa debe mostrar paquetes encaps y decaps.
+! El ping entre VPC1 y VPC2 debe responder correctamente.
+! El trace debe mostrar el camino hacia la LAN remota.
+! En esta VPN, IPSec protege el tráfico GRE entre los peers WAN.
